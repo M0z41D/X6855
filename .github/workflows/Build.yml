@@ -38,10 +38,17 @@ jobs:
       run: |
         git clone https://github.com/M0z41D/X6855.git ~/fox_16.0/device/infinix/X6855
 
+    - name: Clean Unused Devices
+      run: |
+        cd ~/fox_16.0
+        # Menghapus device bawaan lain yang mungkin memicu konflik vendor/omni setup
+        rm -rf device/xiaomi/mondrian
+
     - name: Build Vendor Boot Image
       run: |
         cd ~/fox_16.0
         source build/envsetup.sh
+        export ALLOW_MISSING_DEPENDENCIES=true
         lunch omni_X6855-eng || lunch fox_X6855-eng
         mka vendorbootimage -j$(nproc --all)
 
@@ -50,4 +57,3 @@ jobs:
       with:
         name: OrangeFox_Vendor_Boot_X6855
         path: ~/fox_16.0/out/target/product/X6855/vendor_boot.img
-        
