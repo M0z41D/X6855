@@ -29,7 +29,9 @@ jobs:
       run: |
         mkdir -p ~/fox_12.1
         cd ~/fox_12.1
-        repo init -u https://gitlab.com/OrangeFox/Manifest.git -b fox_12.1 --depth=1
+        git config --global user.name "M0z41D"
+        git config --global user.email "kompetet420@gmail.com"
+        repo init -u https://gitlab.com/OrangeFox/Manifest.git -b fox_12.1 --depth=1 || repo init -u https://github.com/OrangeFox-Recovery/manifest.git -b fox_12.1 --depth=1
         repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
 
     - name: Clone Device Tree
@@ -48,4 +50,3 @@ jobs:
       with:
         name: OrangeFox_Vendor_Boot_X6855
         path: ~/fox_12.1/out/target/product/X6855/vendor_boot.img
-        
