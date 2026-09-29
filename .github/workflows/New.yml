@@ -1,0 +1,72 @@
+name: Build OrangeFox/TWRP (Vendor Boot) X6855
+
+on:
+  workflow_dispatch: # Memungkinkan kamu menjalankan build secara manual dari tab Actions di GitHub
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Device Tree
+        uses: actions/checkout@v4
+
+      - name: Maximize Build Space
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 10240
+          swap-size-mb: 8192
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
+
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git-core gnupg flex bison gperf build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 libncurses5 lib32ncurses5-dev x11proto-core-dev libx11-dev libgl1-mesa-dev libxml2-utils xsltproc unzip fontconfig rsync bc
+
+      - name: Install Repo Tool
+        run: |
+          mkdir -p ~/.bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/.bin/repo
+          chmod a+rx ~/.bin/repo
+          echo "$HOME/.bin" >> $GITHUB_PATH
+
+      - name: Initialize Source Manifest (OrangeFox / Omni)
+        run: |
+          mkdir -p ~/recovery/workspace
+          cd ~/recovery/workspace
+          git config --global user.name "M0z41D"
+          git config --global user.email "mozaid@github.com"
+          
+          # Inisialisasi manifest OrangeFox (Cabang 12.1 / sesuaikan basis source code)
+          repo init -u https://gitlab.com/OrangeFox/manifest.git -b 12.1 --depth=1
+
+      - name: Sync Source Code
+        run: |
+          cd ~/recovery/workspace
+          repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+
+      - name: Link Device Tree
+        run: |
+          mkdir -p ~/recovery/workspace/device/infinix
+          # Menyalin repository device tree dari GitHub workspace ke folder build lokal server
+          cp -r $GITHUB_WORKSPACE ~/recovery/workspace/device/infinix/X6855
+
+      - name: Start Compilation (Vendor Boot Image)
+        run: |
+          cd ~/recovery/workspace
+          source build/envsetup.sh
+          export ALLOW_MISSING_DEPENDENCIES=true
+          
+          # Menjalankan perintah lunch untuk OrangeFox / Omni
+          lunch fox_X6855-eng || lunch omni_X6855-eng
+          
+          # Kompilasi target khusus vendor_bootimage
+          mka vendor_bootimage
+
+      - name: Upload Recovery Artifact (vendor_boot.img)
+        uses: actions/upload-artifact@v4
+        with:
+          name: vendor_boot-Infinix-X6855
+          path: ~/recovery/workspace/out/target/product/X6855/vendor_boot.img
