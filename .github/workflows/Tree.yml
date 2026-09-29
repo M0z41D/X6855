@@ -27,8 +27,8 @@ jobs:
           # Mengunduh folder yang mencakup biner, ramdisk, dan fstab asli
           git sparse-checkout set boot dtbo vendor_boot recovery bootRE
           
-          # Ambil branch spesifik dengan kedalaman 1
-          git fetch --depth=1 origin X6855-16.2.0.135SP15(OP010PF001AZ)
+          # DIPERBAIKI: Nama tag dibungkus tanda kutip agar tidak error karena tanda kurung
+          git fetch --depth=1 origin "X6855-16.2.0.135SP15(OP010PF001AZ)"
           git checkout FETCH_HEAD
           cd ..
           ls -la firmware_dump/
@@ -54,7 +54,6 @@ jobs:
           find firmware_dump/ -name "dtbo.img" -o -name "dtbo" | head -n 1 | xargs -I {} cp {} $DIR/dtbo.img
 
           echo "Mencari dan menyalin fstab asli dari firmware dump secara otomatis..."
-          # Mencari file fstab.* di dalam hasil unduhan firmware dump agar sinkron dengan firmware baru
           if [ -f "$(find firmware_dump/ -name "fstab.*" | head -n 1)" ]; then
             cp "$(find firmware_dump/ -name "fstab.*" | head -n 1)" $DIR/rootdir/etc/fstab.mt6789
             echo "Fstab asli berhasil ditemukan dan disalin!"
