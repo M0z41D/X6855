@@ -192,11 +192,13 @@ jobs:
           BOARD_KERNEL_SEPARATED_DTB := true
           BOARD_BOOTIMG_HEADER_VERSION := 4
           BOARD_MKBOOTIMG_ARGS := --header_version $(BOARD_BOOTIMG_HEADER_VERSION)
+          BOARD_KERNEL_PAGESIZE := 2048
 
           # --- Virtual A/B & Recovery Partition Flags ---
           BOARD_USES_VENDOR_BOOTIMAGE := true
           BOARD_BUILD_VENDOR_BOOT_IMAGE := true
           BOARD_INCLUDE_RECOVERY_RAMDISK_IN_VENDOR_BOOT := true
+          BOARD_VENDOR_BOOTIMAGE_PARTITION_SIZE := 67108864
           TARGET_RECOVERY_FSTAB := device/infinix/X6855/rootdir/etc/recovery.fstab
           TARGET_RECOVERY_INITRCS := device/infinix/X6855/rootdir/etc/init.recovery.mt6789.rc
 
@@ -349,4 +351,3 @@ jobs:
         with:
           name: Absolute_GodTier_MT6789_X6855_Tree
           path: Absolute_GodTier_MT6789_X6855_Tree.zip
-          
