@@ -1,4 +1,4 @@
-name: Ultimate Recovery Device Tree Generator (Dynamic & Smart)
+name: Ultimate Recovery Device Tree Generator (Fixed & Robust)
 
 on:
   workflow_dispatch:
@@ -15,19 +15,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y git curl wget unzip python3 python3-pip cpio findutils zip
 
-      - name: Download Smart Firmware Files (Sparse-Checkout)
+      - name: Download Firmware Files Safely (Sparse-Checkout)
         run: |
-          echo "Mengunduh file inti dan ramdisk secara selektif untuk firmware baru..."
+          echo "Mengunduh file firmware secara efisien..."
           mkdir firmware_dump
           cd firmware_dump
           git init
           git remote add origin https://gitlab.com/rama-firmware-dumps/infinix/Infinix-X6855.git
-          git sparse-checkout init --cone
-          
-          # Mengunduh folder yang mencakup biner, ramdisk, dan fstab asli
-          git sparse-checkout set boot dtbo vendor_boot recovery bootRE
-          
-          # DIPERBAIKI: Nama tag dibungkus tanda kutip agar tidak error karena tanda kurung
+          git config core.sparseCheckout true
+          echo "boot*" >> .git/info/sparse-checkout
+          echo "dtbo*" >> .git/info/sparse-checkout
+          echo "vendor_boot*" >> .git/info/sparse-checkout
+          echo "recovery*" >> .git/info/sparse-checkout
           git fetch --depth=1 origin "X6855-16.2.0.135SP15(OP010PF001AZ)"
           git checkout FETCH_HEAD
           cd ..
@@ -48,33 +47,60 @@ jobs:
           touch $DIR/sepolicy/.placeholder
           touch $DIR/recovery/root/res/theme/.placeholder
 
-          echo "Menyalin biner inti (Kernel, DTB, DTBO) secara presisi..."
-          find firmware_dump/ -name "kernel" -o -name "Image" | head -n 1 | xargs -I {} cp {} $DIR/kernel
-          find firmware_dump/ -name "dtb" | head -n 1 | xargs -I {} cp {} $DIR/dtb
-          find firmware_dump/ -name "dtbo.img" -o -name "dtbo" | head -n 1 | xargs -I {} cp {} $DIR/dtbo.img
+          echo "Menyalin biner inti secara aman..."
+          
+          # 1. Cari dan salin Kernel
+          KERNEL_PATH=$(find firmware_dump/ -name "kernel" -o -name "Image" | head -n 1)
+          if [ -n "$KERNEL_PATH" ]; then
+            cp -f "$KERNEL_PATH" $DIR/kernel
+            echo "Kernel berhasil disalin."
+          fi
+
+          # 2. Cari dan salin DTB
+          DTB_PATH=$(find firmware_dump/ -name "dtb" | head -n 1)
+          if [ -n "$DTB_PATH" ] && [ -f "$DTB_PATH" ]; then
+            cp -f "$DTB_PATH" $DIR/dtb
+            echo "DTB berhasil disalin."
+          fi
+
+          # 3. Cari dan salin DTBO (Menangani apakah bentuknya file atau direktori)
+          DTBO_PATH=$(find firmware_dump/ -name "dtbo*" | head -n 1)
+          if [ -n "$DTBO_PATH" ]; then
+            if [ -d "$DTBO_PATH" ]; then
+              IMG_FILE=$(find "$DTBO_PATH" -name "*.img" | head -n 1)
+              if [ -n "$IMG_FILE" ]; then
+                cp -f "$IMG_FILE" $DIR/dtbo.img
+                echo "DTBO (dari folder) berhasil disalin."
+              fi
+            else
+              cp -f "$DTBO_PATH" $DIR/dtbo.img
+              echo "DTBO (sebagai file) berhasil disalin."
+            fi
+          fi
 
           echo "Mencari dan menyalin fstab asli dari firmware dump secara otomatis..."
-          if [ -f "$(find firmware_dump/ -name "fstab.*" | head -n 1)" ]; then
-            cp "$(find firmware_dump/ -name "fstab.*" | head -n 1)" $DIR/rootdir/etc/fstab.mt6789
+          FSTAB_PATH=$(find firmware_dump/ -name "fstab.*" | head -n 1)
+          if [ -n "$FSTAB_PATH" ] && [ -f "$FSTAB_PATH" ]; then
+            cp -f "$FSTAB_PATH" $DIR/rootdir/etc/fstab.mt6789
             echo "Fstab asli berhasil ditemukan dan disalin!"
           else
             echo "Peringatan: Fstab otomatis tidak ditemukan, menggunakan fstab standar MT6789."
             cat << 'EOF' > $DIR/rootdir/etc/fstab.mt6789
-            system /system ext4 ro,barrier=1 avb=vboot,logical,first_stage_mount
-            vendor /vendor ext4 ro,barrier=1 avb=vboot,logical,first_stage_mount
-            product /product ext4 ro,barrier=1 avb=vboot,logical,first_stage_mount
-            system_ext /system_ext ext4 ro,barrier=1 avb=vboot,logical,first_stage_mount
-            odm /odm ext4 ro,barrier=1 avb=vboot,logical,first_stage_mount
-            /dev/block/by-name/boot /boot emmc defaults recoveryonly
-            /dev/block/by-name/recovery /recovery emmc defaults recoveryonly
-            /dev/block/by-name/userdata /data f2fs noatime,nosuid,nodev,discard,inlinecrypt latemount,wait,check,quota,formattable,fileencryption=aes-256-xts:aes-256-cts:v2+inlinecrypt_optimized
-            /dev/block/by-name/metadata /metadata ext4 noatime,nosuid,nodev,discard,sync,noauto_da_alloc wait,formattable,first_stage_mount
-            /dev/block/by-name/dtbo /dtbo emmc defaults recoveryonly
-            EOF
+          system /system ext4 ro,barrier=1 avb=vboot,logical,first_stage_mount
+          vendor /vendor ext4 ro,barrier=1 avb=vboot,logical,first_stage_mount
+          product /product ext4 ro,barrier=1 avb=vboot,logical,first_stage_mount
+          system_ext /system_ext ext4 ro,barrier=1 avb=vboot,logical,first_stage_mount
+          odm /odm ext4 ro,barrier=1 avb=vboot,logical,first_stage_mount
+          /dev/block/by-name/boot /boot emmc defaults recoveryonly
+          /dev/block/by-name/recovery /recovery emmc defaults recoveryonly
+          /dev/block/by-name/userdata /data f2fs noatime,nosuid,nodev,discard,inlinecrypt latemount,wait,check,quota,formattable,fileencryption=aes-256-xts:aes-256-cts:v2+inlinecrypt_optimized
+          /dev/block/by-name/metadata /metadata ext4 noatime,nosuid,nodev,discard,sync,noauto_da_alloc wait,formattable,first_stage_mount
+          /dev/block/by-name/dtbo /dtbo emmc defaults recoveryonly
+          EOF
           fi
 
           # Salin fstab ke direktori recovery/root/etc/
-          cp $DIR/rootdir/etc/fstab.mt6789 $DIR/recovery/root/etc/recovery.fstab
+          cp -f $DIR/rootdir/etc/fstab.mt6789 $DIR/recovery/root/etc/recovery.fstab
 
           echo "Membuat BoardConfig.mk..."
           cat << 'EOF' > $DIR/BoardConfig.mk
@@ -180,7 +206,7 @@ jobs:
           add_lunch_combo fox_X6855-userdebug
           EOF
 
-          echo "Device tree dinamis dan sinkron firmware baru selesai dibuat!"
+          echo "Device tree dinamis selesai dibuat dengan sukses!"
 
       - name: Archive Ultimate Recovery Tree
         run: |
