@@ -1,10 +1,10 @@
-name: Universal Recovery Device Tree Generator (TWRP & OrangeFox)
+name: Ultimate Recovery Device Tree Generator (TWRP & OrangeFox)
 
 on:
   workflow_dispatch:
 
 jobs:
-  generate-dual-tree:
+  generate-ultimate-tree:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout Repository
@@ -15,28 +15,29 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y git curl wget unzip python3 python3-pip cpio findutils zip
 
-      - name: Download Firmware Dump from GitLab
+      - name: Download Latest Firmware Dump from GitLab
         run: |
-          echo "Mengunduh firmware dump Infinix X6855..."
+          echo "Mengunduh firmware dump terbaru Infinix X6855..."
           git clone --depth=1 https://gitlab.com/rama-firmware-dumps/infinix/Infinix-X6855.git firmware_dump
           ls -la firmware_dump/
 
-      - name: Generate Dual-Support Ready-to-Build Recovery Tree
+      - name: Generate Complete Professional Recovery Tree Structure
         run: |
           CODENAME="X6855"
           DIR="device/infinix/$CODENAME"
           
-          # Membuat struktur folder lengkap untuk recovery
+          # Membuat struktur direktori lengkap ala repositori profesional
           mkdir -p $DIR/recovery/root/etc
           mkdir -p $DIR/rootdir/etc
           mkdir -p $DIR/sepolicy
+          mkdir -p $DIR/recovery/root/res/theme
 
-          echo "Menyalin biner esensial secara presisi..."
+          echo "Menyalin biner inti (Kernel, DTB, DTBO) secara presisi..."
           find firmware_dump/ -name "kernel" -o -name "Image" | head -n 1 | xargs -I {} cp {} $DIR/kernel
           find firmware_dump/ -name "dtb" | head -n 1 | xargs -I {} cp {} $DIR/dtb
           find firmware_dump/ -name "dtbo.img" | head -n 1 | xargs -I {} cp {} $DIR/dtbo.img
 
-          echo "Membuat BoardConfig.mk Universal (TWRP & OrangeFox Ready)..."
+          echo "Membuat BoardConfig.mk..."
           cat << 'EOF' > $DIR/BoardConfig.mk
           # --- Platform & Architecture ---
           TARGET_ARCH := arm64
@@ -62,7 +63,7 @@ jobs:
           BOARD_USERDATAIMAGE_FILE_SYSTEM_TYPE := f2fs
           BOARD_VENDORIMAGE_FILE_SYSTEM_TYPE := ext4
 
-          # --- Universal Recovery / OrangeFox / TWRP Configurations ---
+          # --- Recovery / OrangeFox / TWRP Configurations ---
           TW_THEME := portrait_hdpi
           RECOVERY_SDCARD_ON_DATA := true
           TARGET_USE_CUSTOM_LCHMOD := true
@@ -71,16 +72,28 @@ jobs:
           TW_INCLUDE_NTFS_3G := true
           TW_USE_NEW_MINADBD := true
           
+          # OrangeFox & TWRP Compatibility Flags
+          FOX_USE_TWRP_RECOVERY_IMAGE_BUILDER := true
+          OF_KEEP_DM_VERITY := true
+          OF_PATCH_AVB20 := true
+          
           # Recovery Display & Touch Fixes
           TW_BRIGHTNESS_PATH := "/sys/class/backlight/panel/brightness"
           TW_MAX_BRIGHTNESS := 255
           TW_DEFAULT_BRIGHTNESS := 100
           TW_Y_OFFSET := 0
           TW_H_OFFSET := 0
+          EOF
 
-          # Dual Recovery Flags Compatibility
-          TW_INCLUDE_ENCRYPTED_BACKUPS := true
-          TW_USE_MODEL_HARDWARE_ID_FOR_DEVICE_ID := true
+          echo "Membuat AndroidProducts.mk..."
+          cat << 'EOF' > $DIR/AndroidProducts.mk
+          PRODUCT_MAKEFILES := \
+              $(LOCAL_DIR)/twrp_X6855.mk \
+              $(LOCAL_DIR)/fox_X6855.mk
+
+          COMMON_DEVICE_CHOICES := \
+              twrp_X6855 \
+              fox_X6855
           EOF
 
           echo "Membuat device.mk..."
@@ -94,10 +107,10 @@ jobs:
           PRODUCT_VNDK_VERSION := current
           EOF
 
-          echo "Membuat fstab.mt6789 spesifik MT6789 Virtual A/B..."
+          echo "Membuat fstab.mt6789..."
           cat << 'EOF' > $DIR/rootdir/etc/fstab.mt6789
           # -----------------------------------------------------------------
-          # Universal Recovery fstab for Infinix Note 50 Pro (X6855)
+          # Professional Recovery fstab for Infinix Note 50 Pro (X6855)
           # -----------------------------------------------------------------
           #<src>                                                 <mnt_point>         <type>    <mnt_flags and options>                            <fs_mgr_flags>
           system                                                  /system             ext4      ro,barrier=1                                         avb=vboot,logical,first_stage_mount
@@ -122,10 +135,10 @@ jobs:
           /devices/platform/soc/*.usb/*.usb-*                     /usb-otg            auto      defaults                                             voldmanaged=usbotg:auto
           EOF
 
-          # Salin fstab ke direktori ramdisk recovery
+          # Salin fstab ke direktori recovery/root/etc/
           cp $DIR/rootdir/etc/fstab.mt6789 $DIR/recovery/root/etc/recovery.fstab
 
-          echo "Membuat twrp_X6855.mk (Untuk TWRP Source)..."
+          echo "Membuat twrp_X6855.mk..."
           cat << 'EOF' > $DIR/twrp_X6855.mk
           $(call inherit-product, $(SRC_TARGET_DIR)/product/full_base_telephony.mk)
           $(call inherit-product, vendor/omni/config/common.mk)
@@ -138,7 +151,7 @@ jobs:
           PRODUCT_MANUFACTURER := infinix
           EOF
 
-          echo "Membuat fox_X6855.mk (Untuk OrangeFox Source)..."
+          echo "Membuat fox_X6855.mk..."
           cat << 'EOF' > $DIR/fox_X6855.mk
           $(call inherit-product, $(SRC_TARGET_DIR)/product/full_base_telephony.mk)
           $(call inherit-product, vendor/omni/config/common.mk)
@@ -151,7 +164,7 @@ jobs:
           PRODUCT_MANUFACTURER := infinix
           EOF
 
-          echo "Membuat vendorsetup.sh dengan target lunch twrp_X6855 dan fox_X6855..."
+          echo "Membuat vendorsetup.sh..."
           cat << 'EOF' > $DIR/vendorsetup.sh
           add_lunch_combo twrp_X6855-eng
           add_lunch_combo twrp_X6855-userdebug
@@ -159,14 +172,14 @@ jobs:
           add_lunch_combo fox_X6855-userdebug
           EOF
 
-          echo "Universal Dual Recovery Device Tree (TWRP & OrangeFox) selesai di-generate!"
+          echo "Struktur Professional Device Tree selesai di-generate!"
 
-      - name: Archive Dual Recovery Tree
+      - name: Archive Ultimate Recovery Tree
         run: |
-          zip -r Universal_Dual_Recovery_Tree_X6855.zip device/infinix/X6855
+          zip -r Professional_Recovery_Tree_X6855.zip device/infinix/X6855
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Universal_Dual_Recovery_Tree_X6855
-          path: Universal_Dual_Recovery_Tree_X6855.zip
+          name: Professional_Recovery_Tree_X6855
+          path: Professional_Recovery_Tree_X6855.zip
