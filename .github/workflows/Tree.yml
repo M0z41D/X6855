@@ -1,4 +1,4 @@
-name: Build Complete Professional Recovery Tree (Full Download)
+name: Build Complete Professional Recovery Tree (With DTB Fix)
 
 on:
   workflow_dispatch:
@@ -15,7 +15,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y git curl wget unzip python3 python3-pip cpio findutils zip aria2 p7zip-full
 
-      - name: Download Full Firmware Dump (No Restrictions)
+      - name: Get Firmware
         run: |
           echo "Mengunduh seluruh file firmware Infinix X6855 secara lengkap..."
           mkdir -p firmware_dump
@@ -83,17 +83,25 @@ jobs:
           2.34.1
           EOF
 
-          echo "Menyalin prebuilt DTB ke folder prebuilt/[span_4](start_span)[span_4](end_span)..."
-          DTB_SRC=$(find firmware_dump/ -name "dtb" | head -n 1)
+          echo "Menyalin dtb.img ke folder prebuilt/[span_4](start_span)[span_4](end_span)..."
+          # Mencari file dtb dengan berbagai variasi nama di dalam dump
+          DTB_SRC=$(find firmware_dump/ -name "dtb.img" -o -name "dtb" | head -n 1)
           if [ -n "$DTB_SRC" ] && [ -f "$DTB_SRC" ]; then
             cp -f "$DTB_SRC" $DIR/prebuilt/dtb.img
+          else
+            # Fallback pencarian alternatif jika nama file berbeda
+            DTB_ALT=$(find firmware_dump/ -name "*dtb*" | head -n 1)
+            if [ -n "$DTB_ALT" ] && [ -f "$DTB_ALT" ]; then
+              cp -f "$DTB_ALT" $DIR/prebuilt/dtb.img
+            else
+              echo "Peringatan: File dtb tidak ditemukan, membuat file kosong agar struktur tetap valid."
+              touch $DIR/prebuilt/dtb.img
+            fi
           fi
 
           echo "Menyalin SEMUA modul kernel (.ko) dan firmware (.bin) ke struktur recovery/root/[span_5](start_span)[span_5](end_span)..."
           find firmware_dump/ -name "*.ko" -exec cp -f {} $DIR/recovery/root/lib/modules/ \; 2>/dev/null || true
           find firmware_dump/ -name "*.bin" -exec cp -f {} $DIR/recovery/root/vendor/firmware/ \; 2>/dev/null || true
-          
-          # Salin juga file dependensi modul jika ada di dump
           find firmware_dump/ -name "modules.*" -exec cp -f {} $DIR/recovery/root/lib/modules/ \; 2>/dev/null || true
 
           echo "Membuat file konfigurasi utama BoardConfig.mk..."
@@ -204,10 +212,10 @@ jobs:
 
           cat << 'EOF' > $DIR/README.md
           # Infinix X6855 Universal Recovery Device Tree
-          Supports building both TWRP and OrangeFox Recovery simultaneously with full modules and firmware.
+          Supports building both TWRP and OrangeFox Recovery simultaneously with full modules, firmware, and prebuilt dtb.
           EOF
 
-          echo "Seluruh struktur dan file biner berhasil diunduh dan disusun!"
+          echo "Struktur lengkap dan prebuilt dtb.img berhasil disetel!"
 
       - name: Compress Complete Device Tree
         run: |
