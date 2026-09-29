@@ -26,11 +26,15 @@ jobs:
           CODENAME="X6855"
           DIR="device/infinix/$CODENAME"
           
-          # Membuat struktur direktori lengkap ala repositori profesional
+          # Membuat struktur direktori lengkap
           mkdir -p $DIR/recovery/root/etc
           mkdir -p $DIR/rootdir/etc
           mkdir -p $DIR/sepolicy
           mkdir -p $DIR/recovery/root/res/theme
+
+          # Menambahkan file placeholder agar folder kosong tidak menyebabkan error saat ekstrak ZIP
+          touch $DIR/sepolicy/.placeholder
+          touch $DIR/recovery/root/res/theme/.placeholder
 
           echo "Menyalin biner inti (Kernel, DTB, DTBO) secara presisi..."
           find firmware_dump/ -name "kernel" -o -name "Image" | head -n 1 | xargs -I {} cp {} $DIR/kernel
@@ -177,9 +181,3 @@ jobs:
       - name: Archive Ultimate Recovery Tree
         run: |
           zip -r Professional_Recovery_Tree_X6855.zip device/infinix/X6855
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Professional_Recovery_Tree_X6855
-          path: Professional_Recovery_Tree_X6855.zip
