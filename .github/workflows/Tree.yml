@@ -1,4 +1,4 @@
-name: Ultimate Recovery Device Tree Generator (TWRP & OrangeFox)
+name: Ultimate Recovery Device Tree Generator (Dynamic & Smart)
 
 on:
   workflow_dispatch:
@@ -15,10 +15,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y git curl wget unzip python3 python3-pip cpio findutils zip
 
-      - name: Download Latest Firmware Dump from GitLab
+      - name: Download Smart Firmware Files (Sparse-Checkout)
         run: |
-          echo "Mengunduh firmware dump terbaru Infinix X6855..."
-          git clone --depth=1 https://gitlab.com/rama-firmware-dumps/infinix/Infinix-X6855.git firmware_dump
+          echo "Mengunduh file inti dan ramdisk secara selektif untuk firmware baru..."
+          mkdir firmware_dump
+          cd firmware_dump
+          git init
+          git remote add origin https://gitlab.com/rama-firmware-dumps/infinix/Infinix-X6855.git
+          git sparse-checkout init --cone
+          
+          # Mengunduh folder yang mencakup biner, ramdisk, dan fstab asli
+          git sparse-checkout set boot dtbo vendor_boot recovery bootRE
+          
+          # Ambil branch spesifik dengan kedalaman 1
+          git fetch --depth=1 origin X6855-16.2.0.135SP15(OP010PF001AZ)
+          git checkout FETCH_HEAD
+          cd ..
           ls -la firmware_dump/
 
       - name: Generate Complete Professional Recovery Tree Structure
@@ -32,14 +44,38 @@ jobs:
           mkdir -p $DIR/sepolicy
           mkdir -p $DIR/recovery/root/res/theme
 
-          # Menambahkan file placeholder agar folder kosong tidak menyebabkan error saat ekstrak ZIP
+          # Menambahkan file placeholder agar folder kosong tidak error saat ekstrak ZIP
           touch $DIR/sepolicy/.placeholder
           touch $DIR/recovery/root/res/theme/.placeholder
 
           echo "Menyalin biner inti (Kernel, DTB, DTBO) secara presisi..."
           find firmware_dump/ -name "kernel" -o -name "Image" | head -n 1 | xargs -I {} cp {} $DIR/kernel
           find firmware_dump/ -name "dtb" | head -n 1 | xargs -I {} cp {} $DIR/dtb
-          find firmware_dump/ -name "dtbo.img" | head -n 1 | xargs -I {} cp {} $DIR/dtbo.img
+          find firmware_dump/ -name "dtbo.img" -o -name "dtbo" | head -n 1 | xargs -I {} cp {} $DIR/dtbo.img
+
+          echo "Mencari dan menyalin fstab asli dari firmware dump secara otomatis..."
+          # Mencari file fstab.* di dalam hasil unduhan firmware dump agar sinkron dengan firmware baru
+          if [ -f "$(find firmware_dump/ -name "fstab.*" | head -n 1)" ]; then
+            cp "$(find firmware_dump/ -name "fstab.*" | head -n 1)" $DIR/rootdir/etc/fstab.mt6789
+            echo "Fstab asli berhasil ditemukan dan disalin!"
+          else
+            echo "Peringatan: Fstab otomatis tidak ditemukan, menggunakan fstab standar MT6789."
+            cat << 'EOF' > $DIR/rootdir/etc/fstab.mt6789
+            system /system ext4 ro,barrier=1 avb=vboot,logical,first_stage_mount
+            vendor /vendor ext4 ro,barrier=1 avb=vboot,logical,first_stage_mount
+            product /product ext4 ro,barrier=1 avb=vboot,logical,first_stage_mount
+            system_ext /system_ext ext4 ro,barrier=1 avb=vboot,logical,first_stage_mount
+            odm /odm ext4 ro,barrier=1 avb=vboot,logical,first_stage_mount
+            /dev/block/by-name/boot /boot emmc defaults recoveryonly
+            /dev/block/by-name/recovery /recovery emmc defaults recoveryonly
+            /dev/block/by-name/userdata /data f2fs noatime,nosuid,nodev,discard,inlinecrypt latemount,wait,check,quota,formattable,fileencryption=aes-256-xts:aes-256-cts:v2+inlinecrypt_optimized
+            /dev/block/by-name/metadata /metadata ext4 noatime,nosuid,nodev,discard,sync,noauto_da_alloc wait,formattable,first_stage_mount
+            /dev/block/by-name/dtbo /dtbo emmc defaults recoveryonly
+            EOF
+          fi
+
+          # Salin fstab ke direktori recovery/root/etc/
+          cp $DIR/rootdir/etc/fstab.mt6789 $DIR/recovery/root/etc/recovery.fstab
 
           echo "Membuat BoardConfig.mk..."
           cat << 'EOF' > $DIR/BoardConfig.mk
@@ -111,37 +147,6 @@ jobs:
           PRODUCT_VNDK_VERSION := current
           EOF
 
-          echo "Membuat fstab.mt6789..."
-          cat << 'EOF' > $DIR/rootdir/etc/fstab.mt6789
-          # -----------------------------------------------------------------
-          # Professional Recovery fstab for Infinix Note 50 Pro (X6855)
-          # -----------------------------------------------------------------
-          #<src>                                                 <mnt_point>         <type>    <mnt_flags and options>                            <fs_mgr_flags>
-          system                                                  /system             ext4      ro,barrier=1                                         avb=vboot,logical,first_stage_mount
-          vendor                                                  /vendor             ext4      ro,barrier=1                                         avb=vboot,logical,first_stage_mount
-          product                                                 /product            ext4      ro,barrier=1                                         avb=vboot,logical,first_stage_mount
-          system_ext                                              /system_ext         ext4      ro,barrier=1                                         avb=vboot,logical,first_stage_mount
-          odm                                                     /odm                ext4      ro,barrier=1                                         avb=vboot,logical,first_stage_mount
-          
-          /dev/block/by-name/boot                                 /boot               emmc      defaults                                             recoveryonly
-          /dev/block/by-name/recovery                             /recovery           emmc      defaults                                             recoveryonly
-          /dev/block/by-name/userdata                             /data               f2fs      noatime,nosuid,nodev,discard,inlinecrypt             latemount,wait,check,quota,formattable,fileencryption=aes-256-xts:aes-256-cts:v2+inlinecrypt_optimized
-          /dev/block/by-name/cache                                /cache              ext4      noatime,nosuid,nodev,barrier=1                       wait,check
-          /dev/block/by-name/metadata                             /metadata           ext4      noatime,nosuid,nodev,discard,sync,noauto_da_alloc    wait,formattable,first_stage_mount
-          /dev/block/by-name/dtbo                                 /dtbo               emmc      defaults                                             recoveryonly
-          /dev/block/by-name/para                                 /persistent         emmc      defaults                                             recoveryonly
-          /dev/block/by-name/frp                                  /frp                emmc      defaults                                             recoveryonly
-          /dev/block/by-name/nvdata                               /nvdata             ext4      noatime,nosuid,nodev,discard                         wait,check
-          /dev/block/by-name/nvcfg                                /nvcfg              ext4      noatime,nosuid,nodev,discard                         wait,check
-          
-          # External Storage
-          /devices/platform/externdevice*                         /auto-sdcard        auto      defaults                                             voldmanaged=sdcard1:auto,noemulatedsd
-          /devices/platform/soc/*.usb/*.usb-*                     /usb-otg            auto      defaults                                             voldmanaged=usbotg:auto
-          EOF
-
-          # Salin fstab ke direktori recovery/root/etc/
-          cp $DIR/rootdir/etc/fstab.mt6789 $DIR/recovery/root/etc/recovery.fstab
-
           echo "Membuat twrp_X6855.mk..."
           cat << 'EOF' > $DIR/twrp_X6855.mk
           $(call inherit-product, $(SRC_TARGET_DIR)/product/full_base_telephony.mk)
@@ -176,8 +181,15 @@ jobs:
           add_lunch_combo fox_X6855-userdebug
           EOF
 
-          echo "Struktur Professional Device Tree selesai di-generate!"
+          echo "Device tree dinamis dan sinkron firmware baru selesai dibuat!"
 
       - name: Archive Ultimate Recovery Tree
         run: |
           zip -r Professional_Recovery_Tree_X6855.zip device/infinix/X6855
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Professional_Recovery_Tree_X6855
+          path: Professional_Recovery_Tree_X6855.zip
+          
